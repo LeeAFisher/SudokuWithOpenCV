@@ -2,6 +2,10 @@ import cv2
 import numpy as np
 import imutils
 import pandas as pd
+#from sklearn.neural_network import MLPClassifier
+#from sklearn.decomposition import PCA
+import pickle
+import solver
 
 # Read image
 #img = cv2.imread('sudoku2.jpg')
@@ -19,10 +23,19 @@ def get_perspective(img, location, height = 900, width = 900):
     # Apply Perspective Transform Algorithm
     matrix = cv2.getPerspectiveTransform(pts1, pts2)
     result = cv2.warpPerspective(img, matrix, (width, height))
-    cv2.imshow("Perspective", result)
-    cv2.waitKey(0)
+    #cv2.imshow("Perspective", result)
+    #cv2.waitKey(0)
     return result
 
+def get_InvPerspective(img, masked_num, location, height = 900, width = 900):
+    """Takes original image as input"""
+    pts1 = np.float32([[0, 0], [width, 0], [0, height], [width, height]])
+    pts2 = np.float32([location[0], location[3], location[1], location[2]])
+
+    # Apply Perspective Transform Algorithm
+    matrix = cv2.getPerspectiveTransform(pts1, pts2)
+    result = cv2.warpPerspective(masked_num, matrix, (img.shape[1], img.shape[0]))
+    return result
 
 def filter_boxes(img):
     """Takes an image of a sudoku board and blacks out the grid lines"""
@@ -61,9 +74,9 @@ def find_board(img):
     keypoints = cv2.findContours(edged.copy(), cv2.RETR_TREE,
     cv2.CHAIN_APPROX_SIMPLE)
     contours = imutils.grab_contours(keypoints)
-    newimg = cv2.drawContours(img.copy(), contours, -1, (0, 255, 0), 3)
-    cv2.imshow("Contour", newimg)
-    cv2.waitKey(0)
+    #newimg = cv2.drawContours(img.copy(), contours, -1, (0, 255, 0), 3)
+    #cv2.imshow("Contour", newimg)
+    #cv2.waitKey(0)
     contours = sorted(contours, key=cv2.contourArea, reverse=True)[:15]
     location = None
     # Finds rectangular contour
@@ -78,8 +91,7 @@ def find_board(img):
 
 # split the board into 81 individual images
 def split_boxes(board):
-    """Takes a sudoku board and split it into 81 cells. 
-        each cell contains an element of that board either given or an empty cell."""
+    """Takes a sudoku board and split it into 81 cells."""
     rows = np.vsplit(board,9)
     boxes = []
     for r in rows:
@@ -93,6 +105,25 @@ def split_boxes(board):
     cv2.destroyAllWindows()
     return boxes
 
+
+def read_board(digits):
+    
+    pca_basis = "pca_basis.pkl"
+    with open(pca_basis, 'rb') as file:
+        pca_basis = pickle.load(file)
+    
+    X_test = digits.values
+    X_test_reduced = pca_basis.transform(X_test)
+    
+    pkl_filename = "working_model.pkl"
+    with open(pkl_filename, 'rb') as file:
+        pickle_model = pickle.load(file)
+
+    y_pred_test = pickle_model.predict(X_test_reduced)
+    guess_board = np.array(y_pred_test)
+    
+    
+    return guess_board
 
 def displayNumbers(img, numbers, color=(0, 255, 0)):
     """Displays 81 numbers in an image or mask at the same position of each cell of the board"""
@@ -117,14 +148,50 @@ Gridless = filter_boxes(board)
 
 #result = cleanboard.copy()
 #cv2.imshow("wo", Gridless)
-cv2.imshow("filtered", Gridless)
-cv2.waitKey(0)
+#cv2.imshow("filtered", Gridless)
+#cv2.waitKey(0)
 
 # print(gray.shape)
 rois = split_boxes(Gridless)
 np.shape(rois)
 
 digits = pd.DataFrame(rois)
-digits.to_csv("SudokuDigits.csv", index=None)
+#digits.to_csv("SudokuDigits.csv", index=None)
 
-print(np.shape(rois))
+# reshape the list 
+
+guess_board = read_board(digits)
+board_num = guess_board.astype('uint8').reshape(9,9)
+
+
+# solve the board
+try:
+    solved_board_nums = solver.get_board(board_num)
+
+    # create a binary array of the predicted numbers. 0 means unsolved numbers of sudoku and 1 means given number.
+    binArr = np.where((guess_board)>0, 0, 1)
+    print(binArr)
+    # get only solved numbers for the solved board
+    flat_solved_board_nums = solved_board_nums.flatten()*binArr
+    # create a mask
+    mask = np.zeros_like(board)
+    # displays solved numbers in the mask in the same position where board numbers are empty
+    solved_board_mask = displayNumbers(mask, flat_solved_board_nums)
+    # cv2.imshow("Solved Mask", solved_board_mask)
+    inv = get_InvPerspective(img, solved_board_mask, location)
+    # cv2.imshow("Inverse Perspective", inv)
+    combined = cv2.addWeighted(img, 0.7, inv, 1, 0)
+    cv2.imshow("Final result", combined)
+    # cv2.waitKey(0)
+    
+
+except:
+    print("Solution doesn't exist. Model misread digits.")
+
+cv2.imshow("Input image", img)
+#cv2.imshow("Board", board)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
+
+
+
