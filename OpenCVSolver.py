@@ -2,14 +2,8 @@ import cv2
 import numpy as np
 import imutils
 import pandas as pd
-#from sklearn.neural_network import MLPClassifier
-#from sklearn.decomposition import PCA
-import pickle
 import solver
-
-# Read image
-#img = cv2.imread('sudoku2.jpg')
-#cv2.imshow("Input image", img)
+import pickle
 
 input_size = 50
 
@@ -105,7 +99,7 @@ def split_boxes(board):
     cv2.destroyAllWindows()
     return boxes
 
-
+#Uses the prebuilt models and PCA basis to interpret the images into a 9x9 array.
 def read_board(digits):
     
     pca_basis = "pca_basis.pkl"
@@ -142,16 +136,8 @@ img = cv2.imread('sudoku1.jpg')
 # extract board from input image
 board, location = find_board(img)
 
-#cv2.imshow("board", board)
-#cv2.waitKey(0)
 Gridless = filter_boxes(board)
 
-#result = cleanboard.copy()
-#cv2.imshow("wo", Gridless)
-#cv2.imshow("filtered", Gridless)
-#cv2.waitKey(0)
-
-# print(gray.shape)
 rois = split_boxes(Gridless)
 np.shape(rois)
 
